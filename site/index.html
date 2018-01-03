@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Piazza Insulin Calculator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://code.jquery.com/jquery-3.2.1.js" integrity="sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE=" crossorigin="anonymous"></script>
+    <script src="index.js"></script>
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+        crossorigin="anonymous">
+    
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp"
+        crossorigin="anonymous">
+    
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+        crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="jumbotron">
+        <h1 style=text-align:center>Piazza Insulin Calculator</h1>
+    </div>
+    <div class="container">
+        <div class="panel">
+            <div class="panel-body">
+                <form class="navbar-form navbar-left">
+                    <div class="form-group">
+                        <label>
+                            Carbs
+                            <input class="form-control" type="number" placeholder="Carbs" id="carbs"/>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            Blood Glucose
+                            <input class="form-control" type="number" placeholder="Blood Glucose" id="blood_glucose"/>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            Time of Day
+                            <select class="form-control" title="Time of Day" id="time_of_day">
+                                <option value="morning">Morning</option>
+                                <option value="afternoon">Afternoon</option>
+                                <option value="evening">Evening</option>
+                            </select>
+                        </label>
+                    </div>
+                    <input type="button" value="Submit" id="submit-button"/>
+                </form>
+            </div>
+
+        </div>
+        <div class="panel panel-default"> 
+            <div class="panel-heading">
+                Results
+            </div>
+            <div class="panel-body">
+                <div id="insulin"></div>
+                <div id="note" style="color:red;"></div>
+                <div id="explanation"></div>
+            </div>
+        </div>
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                Doctor's Explanation
+            </div>
+            <div class="panel-body">
+                <ul>
+                    <li>Do not shoot insulin if you’re blood glucose is under 100.</li>
+                    <li>YOUR TARGET BLOID GLUCOSE: 150</li>
+                    <li>INSULIN to CARB RATIO: How much rapid-acting insulin your body needs to “cover” a certain amount of carbohydrate.</li>
+                    <li>CORRECTION FACTOR: Add .5 to bolus for every 20 over target; Substract .5 for every 20 under target</li>
+                    <li>INSULIN DOSING RECOMMENDATION:</li>
+                    <li>170-190 mg/dL: Calculate bolus using carb ratio Add 1 unit of insulin to bolus.</li>
+                    <li>150-170 mg/dL: Calculate bolus using carb ratio Add .5 unit of insulin to bolus.</li>
+                    <li>100-150 mg/dL: Calculate bolus using carb ratio. </li>
+                    <li>80 – 100 mg/dL Do not shoot insulin until 15 minutes after you start eating. Subtract .5 unit of insulin from bolus</li>
+                    <li>60 – 80 mg/dL: Do not shoot insulin until 15 minutes after you start eating. Subtract 1 unit of insulin from bolus.</li>
+                    <li>INSULIN TO CARB RATIO Morning= 1 / 9 Afternoon= 1 / 14 Evening = 1 / 9</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
