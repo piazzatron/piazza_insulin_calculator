@@ -1,0 +1,13 @@
+{
+    "defaultSeverity": "error",
+    "extends": [
+        "tslint:recommended"
+    ],
+    "jsRules": {},
+    "rules": {
+        "only-arrow-functions": true,
+        "typedef": [true, "call-signature", "arrow-call-signature", "parameter", "arrow-parameter"],
+        "max-line-length": [true, 170]
+    },
+    "rulesDirectory": []
+}

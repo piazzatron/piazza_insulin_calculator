@@ -4,13 +4,18 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc index.ts"
+    "test": "jasmine",
+    "build": "npm run lint && tsc index.ts --outfile build/index.js --module amd",
+    "lint": "tslint index.ts"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "jest": "^22.0.4",
     "typescript": "^2.6.2"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "0.0.33",
+    "tslint": "^5.9.1"
   }
 }

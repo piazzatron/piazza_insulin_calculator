@@ -1,131 +1,246 @@
-// TODO: How do we tell people to delay taking insulin?
+/*
+ *
+ * Piazza Insulin Calculator
+ * Copyright Michael Piazza 2018
+ *
+ */
 
-enum TimeOfDay {
-    Morning = "morning",
-    Afternoon = "afternoon",
-    Evening = "evening"
-}
+/* ---------------- Types ---------------- */
 
-interface IInput {
-    bloodGlucose: number;
+import { Callback, Context, Handler} from "aws-lambda";
+
+type BloodGlucose = number;
+type InsulinAdjustment = number;
+type InsulinUnit = number;
+type Bucket = [number, number];
+type Carb = number;
+
+interface ICalculationContext {
+    bg: BloodGlucose;
+    carbs: Carb;
     timeOfDay: TimeOfDay;
-    carbs: number;
 }
 
-interface IOutput {
-    insulin: string;
+interface ICalculationOutput {
+    insulin: InsulinUnit;
+}
+
+interface IFormatMessageContext {
+    adjustment: InsulinAdjustment;
+    timeOfDay: TimeOfDay;
+    insulinPerCarbRatio: number;
+    bg: BloodGlucose;
+    carbs: Carb;
+    baseInsulin: number;
+}
+
+interface IRequest {
+    bg: BloodGlucose;
+    carbs: Carb;
+    timeOfDay: TimeOfDay;
+}
+
+interface IResponse {
+    insulin: InsulinUnit;
+    carbs: Carb;
+    timeOfDay: TimeOfDay;
+    bloodGlucose: BloodGlucose;
     message: string;
-    note: string;
 }
 
-interface IGlucoseBucket {
-    min: number;
-    max: number;
-    adjustment: number;
-    note: string;
+interface IFormatMessageInput {
+    adjustment: InsulinAdjustment;
+    timeOfDay: TimeOfDay;
+    insulinPerCarbRatio: number;
+    bg: BloodGlucose;
+    carbs: Carb;
+    baseInsulin: InsulinUnit;
 }
 
-const TARGET_BLOOD_GLUCOSE = 150;
-const GLUCOSE_BUCKETS: IGlucoseBucket[] = [
-    {
-        min: 170,
-        max: 190,
-        adjustment: 1,
-        note: ""
-    }, 
-    {
-        min: 150,
-        max: 170,
-        adjustment: 0.5,
-        note: ""
-    },
-    {
-        min: 100,
-        max: 150,
-        adjustment: 0,
-        note: ""
-    },
-    {
-        min: 80,
-        max: 100,
-        adjustment: -0.5,
-        note: "Do not shoot insulin until 15 minutes after you start eating"
-    },
-    {
-        min: 60,
-        max: 80,
-        adjustment: -1,
-        note: "Do not shoot insulin until 15 minutes after you start eating"
-    }
-];
+interface ILambdaResponse {
+    body: string;
+    statusCode: number;
+    headers: {[index: string]: string};
+}
 
-const RATIO_MAP: {[timeOfDay: number]: string} = {}
-RATIO_MAP[TimeOfDay.Morning] = (1/9);
-RATIO_MAP[TimeOfDay.Afternoon] = (1/14);
-RATIO_MAP[TimeOfDay.Evening] = (1/9);
+/* ---------------- Constants ---------------- */
 
-const calculateInsulin = (input: IInput): IOutput => {
-    // Positive delta = hyperglycemic, negate = hypo 
-    const min = GLUCOSE_BUCKETS[GLUCOSE_BUCKETS.length - 1].min;
-    const max = GLUCOSE_BUCKETS[0].max - 1;
+/* Enum for time of day */
+enum TimeOfDay {
+    "Morning" = "morning",
+    "Afternoon" = "afternoon",
+    "Evening" = "evening",
+}
 
-    if (input.bloodGlucose < min) {
-        return {
-            note: `Error: Blood Glucose is less than ${min}, and doctor hasn't specified what to do in this situation. 
-                Time to call a relative.`,
-            insulin: "",
-            message: ""
+/* A mapping from time of day -> glucose ratio */
+const INSULIN_PER_CARB_RATIOS: {[index: string]: number} = {};
+INSULIN_PER_CARB_RATIOS[TimeOfDay.Morning] = (1 / 9);
+INSULIN_PER_CARB_RATIOS[TimeOfDay.Afternoon] = (1 / 14);
+INSULIN_PER_CARB_RATIOS[TimeOfDay.Evening] = (1 / 9);
 
-        }
-    } else if (input.bloodGlucose > max) {
-        return {
-            note: `Error: Blood Glucose is greater than ${max}, and doctor hasn't specified what to do in this situation. 
-                Time to call a relative.`,
-            insulin: "",
-            message: ""
-        }
+const MIN_BLOOD_GLUCOSE = 40;
+const MAX_BLOOD_GLUCOSE = 500;
+
+/* Number of units of blood glucose which have the same correction factor applied. */
+const ADJUSTMENT_INTERVAL = 20;
+
+/* Floor of the 'happy interval' where no adjustments are applied. */
+const MINIMUM_NO_ADJUSTMENT_GLUCOSE = 100;
+
+/* Ceiling of the 'happy interval' where no adjustments are applied. */
+const MAXIMUM_NO_ADJUSTMENT_GLUCOSE = 150;
+
+/* How many units of insulin we add or subtract, per adjustment unit. */
+const BASE_ADJUSTMENT_INSULIN_UNIT = 0.5;
+
+/* ---------------- Insulin Calculation ---------------- */
+
+/* Returns how many adjustment units we are below our happy interval. */
+const getNumAdjustmentsFromMin = (bg: BloodGlucose): number => {
+    const delta = MINIMUM_NO_ADJUSTMENT_GLUCOSE - bg;
+    const numAdjustments = Math.ceil(delta / ADJUSTMENT_INTERVAL);
+    return numAdjustments;
+};
+
+/* Returns how many adjustment units we are above our happy interval. */
+const getNumAdjustmentsFromMax = (bg: BloodGlucose): number => {
+    const delta = bg - MAXIMUM_NO_ADJUSTMENT_GLUCOSE;
+    const numAdjustments = Math.ceil(delta / ADJUSTMENT_INTERVAL);
+    return numAdjustments;
+};
+
+/* Calculates how many insulin units to adjust relative to the standard formula based on the blood glucose.  */
+const calculateAdjustment = (bg: BloodGlucose): InsulinAdjustment => {
+    if (bg >= MINIMUM_NO_ADJUSTMENT_GLUCOSE &&
+        bg <= MAXIMUM_NO_ADJUSTMENT_GLUCOSE) {
+            return 0;
     }
 
-    const bucket = GLUCOSE_BUCKETS.filter((bucket) => (input.bloodGlucose >= bucket.min && input.bloodGlucose < bucket.max))[0]
-    const ratio = RATIO_MAP[input.timeOfDay];
-    const baseInsulin = input.carbs * ratio;
-    const adjustedInsulin = baseInsulin + bucket.adjustment;
+    let adjustment: InsulinAdjustment;
 
-    let msg = "";
-    let adjustmentPartial = "";
-
-    if (bucket.adjustment == 0) {
-        adjustmentPartial = "no extra insulin added";
+    if (bg < MINIMUM_NO_ADJUSTMENT_GLUCOSE) {
+        const numAdjustments = getNumAdjustmentsFromMin(bg);
+        adjustment = -1 * numAdjustments * BASE_ADJUSTMENT_INSULIN_UNIT;
     } else {
-        adjustmentPartial = `${bucket.adjustment} units of insulin ${bucket.adjustment > 0 ? "added" : "subtracted"}`
+        const numAdjustments = getNumAdjustmentsFromMax(bg);
+        adjustment = numAdjustments * BASE_ADJUSTMENT_INSULIN_UNIT;
     }
-    const baseMsg = `<li> It's ${input.timeOfDay}, so you should take ${ratio.toFixed(3)} units of insulin for each carb. </li> 
-    <li> Since you ate ${input.carbs} carbs, your unadjusted insulin is ${baseInsulin.toFixed(3)} units.</li>`;
-    const adjustmentMsg = `<li>Because your blood glucose of ${input.bloodGlucose} is in the range of ${bucket.min} to ${bucket.max - 1}, there was ${adjustmentPartial}.</li>`;
-    msg = `${baseMsg}\n${adjustmentMsg}`;
 
-    return {
-        insulin: adjustedInsulin.toFixed(3),
-        message: msg,
-        note: bucket.note
+    return adjustment;
+};
+
+const calculateBucket = (bg: BloodGlucose): Bucket => {
+    if (bg >= MINIMUM_NO_ADJUSTMENT_GLUCOSE &&
+        bg <= MAXIMUM_NO_ADJUSTMENT_GLUCOSE) {
+        return [MINIMUM_NO_ADJUSTMENT_GLUCOSE, MAXIMUM_NO_ADJUSTMENT_GLUCOSE];
     }
-}
 
-exports.handler = (event, context) => {
-    try {
-        const insulinResponse = calculateInsulin(JSON.parse(event.body));
-        console.log(insulinResponse)
+    let min;
+    let max;
 
-        const response = {
-            statusCode: 200,
-            headers: {
-                "Access-Control-Allow-Origin": "*"
-            },
-            body: JSON.stringify(insulinResponse)
+    if (bg < MINIMUM_NO_ADJUSTMENT_GLUCOSE) {
+        const adjustments = getNumAdjustmentsFromMin(bg);
+        min = MINIMUM_NO_ADJUSTMENT_GLUCOSE - (ADJUSTMENT_INTERVAL * adjustments);
+        max = MINIMUM_NO_ADJUSTMENT_GLUCOSE - (ADJUSTMENT_INTERVAL * (adjustments - 1)) - 1;
+    } else {
+        const adjustments = getNumAdjustmentsFromMax(bg);
+        min = MAXIMUM_NO_ADJUSTMENT_GLUCOSE + (ADJUSTMENT_INTERVAL * (adjustments - 1)) + 1;
+        max = MAXIMUM_NO_ADJUSTMENT_GLUCOSE + (ADJUSTMENT_INTERVAL * adjustments);
+    }
+
+    return [min, max];
+};
+
+const calculateInsulinWithExplanation = (bg: BloodGlucose, carbs: Carb, timeOfDay: TimeOfDay): [InsulinUnit, string] => {
+    const insulinPerCarbRatio = INSULIN_PER_CARB_RATIOS[timeOfDay];
+    const baseInsulin = carbs * insulinPerCarbRatio;
+    const adjustment = calculateAdjustment(bg);
+    const adjustedInsulin = baseInsulin + adjustment;
+
+    const messageInput: IFormatMessageInput = {
+        adjustment,
+        baseInsulin,
+        bg,
+        carbs,
+        insulinPerCarbRatio,
+        timeOfDay,
+    };
+
+    const message = formatMessage(messageInput);
+
+    return [adjustedInsulin, message];
+};
+
+const formatMessage = (input: IFormatMessageInput): string => {
+    const {adjustment, bg, timeOfDay, insulinPerCarbRatio, baseInsulin, carbs} = input;
+    let adjustmentPartial;
+
+    if (adjustment === 0) {
+        adjustmentPartial = `no extra insulin added`;
+    } else {
+        adjustmentPartial = `${adjustment} units of insulin  ${(adjustment > 0 ? "added" : "subtracted")}`;
+    }
+
+    const bucket = calculateBucket(bg);
+
+    const baseMsg = `<li> It's ${timeOfDay}, so you should take ${insulinPerCarbRatio.toFixed(2)} units of insulin for each carb. </li>
+                <li> Since you ate ${carbs} carbs, your unadjusted insulin is ${baseInsulin.toFixed(3)} units.</li>`;
+    const adjustmentMsg = `<li>Because your blood glucose of ${bg} is in the range of ${bucket[0]} to ${bucket[1]}, there was ${adjustmentPartial}.</li>`;
+
+    return `${baseMsg}\n${adjustmentMsg}`;
+};
+
+/* TODO: Think of a better name for this fella */
+const main = (request: IRequest): IResponse => {
+    /*  TODO: Refactor this bit here */
+    if (request.bg < MIN_BLOOD_GLUCOSE) {
+        return {
+            bloodGlucose: request.bg,
+            carbs: request.carbs,
+            insulin: 0,
+            message: `Error: Blood Glucose is less than ${MIN_BLOOD_GLUCOSE},
+                 and doctor hasn't specified what to do in this situation. \n Time to call a relative.`,
+            timeOfDay: request.timeOfDay,
         };
 
-        context.done(null, response);
+    } else if (request.bg > MAX_BLOOD_GLUCOSE) {
+        return {
+            bloodGlucose: request.bg,
+            carbs: request.carbs,
+            insulin: 0,
+            message: `Error: Blood Glucose is greater than ${MAX_BLOOD_GLUCOSE},
+                and doctor hasn't specified what to do in this situation. \n Time to call a relative.`,
+            timeOfDay: request.timeOfDay,
+        };
+    }
+
+    const [ insulin, explanation ] = calculateInsulinWithExplanation(request.bg, request.carbs, request.timeOfDay);
+
+    return {
+        bloodGlucose: request.bg,
+        carbs: request.carbs,
+        insulin: Number(insulin.toFixed(2)),
+        message: explanation,
+        timeOfDay: request.timeOfDay,
+    };
+};
+
+const handleRequest: Handler = (event: any, context: Context, callback: Callback): void => {
+    try {
+        const request: IRequest = JSON.parse(event.body);
+        const responseBody = main(request);
+
+        const response: ILambdaResponse = {
+            body: JSON.stringify(responseBody),
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+            },
+            statusCode: 200,
+        };
+        context.done(undefined, response);
     } catch (err) {
         context.done(err, null);
     }
 };
+
+export const handler = handleRequest;
