@@ -19,6 +19,12 @@ $(document).ready(function(){
             $("#note").html(data.note);
             $("#explanation").html(`<ul> ${data.message} </ul>`);
             $("#insulin").html(`<h1> Insulin: ${data.insulin} units.</h1>`);
+            $("#echoedInput").html(`
+            <ul>
+                <li><h2>Blood Glucose: ${data.bloodGlucose} </h2></li>
+                <li><h2>Carbs: ${data.carbs} </h2></li>
+                <li><h2>Time: ${data.timeOfDay} </h2></li>
+            <ul>`);
         });
     });
 });

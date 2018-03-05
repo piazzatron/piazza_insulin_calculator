@@ -155,7 +155,7 @@ const calculateInsulinWithExplanation = (bg: BloodGlucose, carbs: Carb, timeOfDa
     const insulinPerCarbRatio = INSULIN_PER_CARB_RATIOS[timeOfDay];
     const baseInsulin = carbs * insulinPerCarbRatio;
     const adjustment = calculateAdjustment(bg);
-    const adjustedInsulin = baseInsulin + adjustment;
+    const adjustedInsulin = Number((baseInsulin + adjustment).toFixed(2));
 
     const messageInput: IFormatMessageInput = {
         adjustment,
@@ -244,3 +244,4 @@ const handleRequest: Handler = (event: any, context: Context, callback: Callback
 };
 
 export const handler = handleRequest;
+export const calculateWithExplanation = calculateInsulinWithExplanation;

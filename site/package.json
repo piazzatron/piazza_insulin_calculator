@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "jasmine"
+    "deploy": "aws s3 cp --acl public-read index.html s3://insulin-calculator/site/ && aws s3 cp --acl public-read index.js s3://insulin-calculator/site/"
   },
   "author": "",
   "license": "ISC"
