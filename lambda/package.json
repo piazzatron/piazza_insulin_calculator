@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "npm run build && jest",
-    "build": "npm run lint && tsc --outDir build index.ts",
-    "lint": "tslint index.ts"
+    "build": "npm run lint && tsc --outDir build src/index.ts",
+    "lint": "tslint src/index.ts"
   },
   "author": "",
   "license": "ISC",
