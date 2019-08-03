@@ -82,7 +82,8 @@ var calculateInsulinWithExplanation = function (bg, carbs, timeOfDay) {
     var insulinPerCarbRatio = INSULIN_PER_CARB_RATIOS[timeOfDay];
     var baseInsulin = carbs * insulinPerCarbRatio;
     var adjustment = calculateAdjustment(bg);
-    var adjustedInsulin = Number((baseInsulin + adjustment).toFixed(2));
+    var adjustedInsulin = Math.max(baseInsulin + adjustment, 0);
+    var formattedAdjustedInsulin = Number(adjustedInsulin.toFixed(2));
     var messageInput = {
         adjustment: adjustment,
         baseInsulin: baseInsulin,
@@ -92,20 +93,21 @@ var calculateInsulinWithExplanation = function (bg, carbs, timeOfDay) {
         timeOfDay: timeOfDay
     };
     var message = formatMessage(messageInput);
-    return [adjustedInsulin, message];
+    return [formattedAdjustedInsulin, message];
 };
 var formatMessage = function (input) {
     var adjustment = input.adjustment, bg = input.bg, timeOfDay = input.timeOfDay, insulinPerCarbRatio = input.insulinPerCarbRatio, baseInsulin = input.baseInsulin, carbs = input.carbs;
+    var capitalize = function (word) { return (word.charAt(0).toUpperCase() + word.slice(1)); };
     var adjustmentPartial;
     if (adjustment === 0) {
         adjustmentPartial = "no extra insulin added";
     }
     else {
-        adjustmentPartial = adjustment + " units of insulin  " + (adjustment > 0 ? "added" : "subtracted");
+        adjustmentPartial = Math.abs(adjustment) + " units of insulin  " + (adjustment > 0 ? "added" : "subtracted");
     }
     var bucket = calculateBucket(bg);
-    var baseMsg = "<li> It's " + timeOfDay + ", so you should take " + insulinPerCarbRatio.toFixed(2) + " units of insulin for each carb. </li>\n                <li> Since you ate " + carbs + " carbs, your unadjusted insulin is " + baseInsulin.toFixed(3) + " units.</li>";
-    var adjustmentMsg = "<li>Because your blood glucose of " + bg + " is in the range of " + bucket[0] + " to " + bucket[1] + ", there was " + adjustmentPartial + ".</li>";
+    var baseMsg = "<li> " + capitalize(timeOfDay) + " insulin to carb ratio: " + insulinPerCarbRatio.toFixed(2) + ". </li>\n                <li> " + capitalize(carbs.toString()) + " carbs * " + insulinPerCarbRatio.toFixed(2) + " units per carb = " + baseInsulin.toFixed(2) + " units of insulin.</li>";
+    var adjustmentMsg = "<li>" + capitalize(adjustmentPartial) + " because blood glucose of " + bg + " is in the range of " + bucket[0] + " to " + bucket[1] + ".</li>";
     return baseMsg + "\n" + adjustmentMsg;
 };
 /* TODO: Think of a better name for this fella */

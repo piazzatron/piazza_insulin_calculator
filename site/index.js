@@ -5,7 +5,6 @@ $(document).ready(function(){
         const payload = {
             bg: document.getElementById("blood_glucose").value,
             carbs: document.getElementById("carbs").value,
-            timeOfDay: document.getElementById("time_of_day").value
         };
 
         fetch(ENDPOINT, {
@@ -23,7 +22,6 @@ $(document).ready(function(){
             <ul>
                 <li><h2>Blood Glucose: ${data.bloodGlucose} </h2></li>
                 <li><h2>Carbs: ${data.carbs} </h2></li>
-                <li><h2>Time: ${data.timeOfDay} </h2></li>
             <ul>`);
         });
     });

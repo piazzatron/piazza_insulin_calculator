@@ -4,10 +4,9 @@
  * Copyright Michael Piazza 2018
  *
  */
+import { Callback, Context, Handler } from "aws-lambda";
 
 /* ---------------- Types ---------------- */
-
-import { Callback, Context, Handler} from "aws-lambda";
 
 type BloodGlucose = number;
 type InsulinAdjustment = number;
@@ -15,42 +14,20 @@ type InsulinUnit = number;
 type Bucket = [number, number];
 type Carb = number;
 
-interface ICalculationContext {
-    bg: BloodGlucose;
-    carbs: Carb;
-    timeOfDay: TimeOfDay;
-}
-
-interface ICalculationOutput {
-    insulin: InsulinUnit;
-}
-
-interface IFormatMessageContext {
-    adjustment: InsulinAdjustment;
-    timeOfDay: TimeOfDay;
-    insulinPerCarbRatio: number;
-    bg: BloodGlucose;
-    carbs: Carb;
-    baseInsulin: number;
-}
-
 interface IRequest {
     bg: BloodGlucose;
     carbs: Carb;
-    timeOfDay: TimeOfDay;
 }
 
 interface IResponse {
     insulin: InsulinUnit;
     carbs: Carb;
-    timeOfDay: TimeOfDay;
     bloodGlucose: BloodGlucose;
     message: string;
 }
 
 interface IFormatMessageInput {
     adjustment: InsulinAdjustment;
-    timeOfDay: TimeOfDay;
     insulinPerCarbRatio: number;
     bg: BloodGlucose;
     carbs: Carb;
@@ -65,18 +42,7 @@ interface ILambdaResponse {
 
 /* ---------------- Constants ---------------- */
 
-/* Enum for time of day */
-enum TimeOfDay {
-    "Morning" = "morning",
-    "Afternoon" = "afternoon",
-    "Evening" = "evening",
-}
-
-/* A mapping from time of day -> glucose ratio */
-const INSULIN_PER_CARB_RATIOS: {[index: string]: number} = {};
-INSULIN_PER_CARB_RATIOS[TimeOfDay.Morning] = (1 / 9);
-INSULIN_PER_CARB_RATIOS[TimeOfDay.Afternoon] = (1 / 14);
-INSULIN_PER_CARB_RATIOS[TimeOfDay.Evening] = (1 / 9);
+const INSULIN_PER_CARB_RATIO = (1 / 12);
 
 const MIN_BLOOD_GLUCOSE = 40;
 const MAX_BLOOD_GLUCOSE = 500;
@@ -85,10 +51,10 @@ const MAX_BLOOD_GLUCOSE = 500;
 const ADJUSTMENT_INTERVAL = 20;
 
 /* Floor of the 'happy interval' where no adjustments are applied. */
-const MINIMUM_NO_ADJUSTMENT_GLUCOSE = 100;
+const MINIMUM_NO_ADJUSTMENT_GLUCOSE = 120;
 
 /* Ceiling of the 'happy interval' where no adjustments are applied. */
-const MAXIMUM_NO_ADJUSTMENT_GLUCOSE = 150;
+const MAXIMUM_NO_ADJUSTMENT_GLUCOSE = 180;
 
 /* How many units of insulin we add or subtract, per adjustment unit. */
 const BASE_ADJUSTMENT_INSULIN_UNIT = 0.5;
@@ -151,9 +117,8 @@ const calculateBucket = (bg: BloodGlucose): Bucket => {
     return [min, max];
 };
 
-const calculateInsulinWithExplanation = (bg: BloodGlucose, carbs: Carb, timeOfDay: TimeOfDay): [InsulinUnit, string] => {
-    const insulinPerCarbRatio = INSULIN_PER_CARB_RATIOS[timeOfDay];
-    const baseInsulin = carbs * insulinPerCarbRatio;
+const calculateInsulinWithExplanation = (bg: BloodGlucose, carbs: Carb): [InsulinUnit, string] => {
+    const baseInsulin = carbs * INSULIN_PER_CARB_RATIO;
     const adjustment = calculateAdjustment(bg);
     const adjustedInsulin = Math.max(baseInsulin + adjustment, 0);
     const formattedAdjustedInsulin = Number(adjustedInsulin.toFixed(2));
@@ -163,8 +128,7 @@ const calculateInsulinWithExplanation = (bg: BloodGlucose, carbs: Carb, timeOfDa
         baseInsulin,
         bg,
         carbs,
-        insulinPerCarbRatio,
-        timeOfDay,
+        insulinPerCarbRatio: INSULIN_PER_CARB_RATIO,
     };
 
     const message = formatMessage(messageInput);
@@ -173,7 +137,7 @@ const calculateInsulinWithExplanation = (bg: BloodGlucose, carbs: Carb, timeOfDa
 };
 
 const formatMessage = (input: IFormatMessageInput): string => {
-    const {adjustment, bg, timeOfDay, insulinPerCarbRatio, baseInsulin, carbs} = input;
+    const {adjustment, bg, insulinPerCarbRatio, baseInsulin, carbs} = input;
     const capitalize = (word: string): string => (word.charAt(0).toUpperCase() + word.slice(1));
     let adjustmentPartial;
 
@@ -184,7 +148,7 @@ const formatMessage = (input: IFormatMessageInput): string => {
     }
 
     const bucket = calculateBucket(bg);
-    const baseMsg = `<li> ${capitalize(timeOfDay)} insulin to carb ratio: ${insulinPerCarbRatio.toFixed(2)}. </li>
+    const baseMsg = `<li> Fixed insulin to carb ratio: ${insulinPerCarbRatio.toFixed(2)}. </li>
                 <li> ${capitalize(carbs.toString())} carbs * ${insulinPerCarbRatio.toFixed(2)} units per carb = ${baseInsulin.toFixed(2)} units of insulin.</li>`;
     const adjustmentMsg = `<li>${capitalize(adjustmentPartial)} because blood glucose of ${bg} is in the range of ${bucket[0]} to ${bucket[1]}.</li>`;
 
@@ -201,7 +165,6 @@ const main = (request: IRequest): IResponse => {
             insulin: 0,
             message: `Error: Blood Glucose is less than ${MIN_BLOOD_GLUCOSE},
                  and doctor hasn't specified what to do in this situation. \n Time to call a relative.`,
-            timeOfDay: request.timeOfDay,
         };
 
     } else if (request.bg > MAX_BLOOD_GLUCOSE) {
@@ -211,18 +174,16 @@ const main = (request: IRequest): IResponse => {
             insulin: 0,
             message: `Error: Blood Glucose is greater than ${MAX_BLOOD_GLUCOSE},
                 and doctor hasn't specified what to do in this situation. \n Time to call a relative.`,
-            timeOfDay: request.timeOfDay,
         };
     }
 
-    const [ insulin, explanation ] = calculateInsulinWithExplanation(request.bg, request.carbs, request.timeOfDay);
+    const [ insulin, explanation ] = calculateInsulinWithExplanation(request.bg, request.carbs);
 
     return {
         bloodGlucose: request.bg,
         carbs: request.carbs,
         insulin: Number(insulin.toFixed(2)),
         message: explanation,
-        timeOfDay: request.timeOfDay,
     };
 };
 
