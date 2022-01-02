@@ -1,32 +1,15 @@
 "use strict";
-/*
- *
- * Piazza Insulin Calculator
- * Copyright Michael Piazza 2018
- *
- */
 exports.__esModule = true;
 /* ---------------- Constants ---------------- */
-/* Enum for time of day */
-var TimeOfDay;
-(function (TimeOfDay) {
-    TimeOfDay["Morning"] = "morning";
-    TimeOfDay["Afternoon"] = "afternoon";
-    TimeOfDay["Evening"] = "evening";
-})(TimeOfDay || (TimeOfDay = {}));
-/* A mapping from time of day -> glucose ratio */
-var INSULIN_PER_CARB_RATIOS = {};
-INSULIN_PER_CARB_RATIOS[TimeOfDay.Morning] = (1 / 9);
-INSULIN_PER_CARB_RATIOS[TimeOfDay.Afternoon] = (1 / 14);
-INSULIN_PER_CARB_RATIOS[TimeOfDay.Evening] = (1 / 9);
+var INSULIN_PER_CARB_RATIO = (1 / 12);
 var MIN_BLOOD_GLUCOSE = 40;
 var MAX_BLOOD_GLUCOSE = 500;
 /* Number of units of blood glucose which have the same correction factor applied. */
 var ADJUSTMENT_INTERVAL = 20;
 /* Floor of the 'happy interval' where no adjustments are applied. */
-var MINIMUM_NO_ADJUSTMENT_GLUCOSE = 100;
+var MINIMUM_NO_ADJUSTMENT_GLUCOSE = 120;
 /* Ceiling of the 'happy interval' where no adjustments are applied. */
-var MAXIMUM_NO_ADJUSTMENT_GLUCOSE = 150;
+var MAXIMUM_NO_ADJUSTMENT_GLUCOSE = 180;
 /* How many units of insulin we add or subtract, per adjustment unit. */
 var BASE_ADJUSTMENT_INSULIN_UNIT = 0.5;
 /* ---------------- Insulin Calculation ---------------- */
@@ -78,9 +61,8 @@ var calculateBucket = function (bg) {
     }
     return [min, max];
 };
-var calculateInsulinWithExplanation = function (bg, carbs, timeOfDay) {
-    var insulinPerCarbRatio = INSULIN_PER_CARB_RATIOS[timeOfDay];
-    var baseInsulin = carbs * insulinPerCarbRatio;
+var calculateInsulinWithExplanation = function (bg, carbs) {
+    var baseInsulin = carbs * INSULIN_PER_CARB_RATIO;
     var adjustment = calculateAdjustment(bg);
     var adjustedInsulin = Math.max(baseInsulin + adjustment, 0);
     var formattedAdjustedInsulin = Number(adjustedInsulin.toFixed(2));
@@ -89,14 +71,13 @@ var calculateInsulinWithExplanation = function (bg, carbs, timeOfDay) {
         baseInsulin: baseInsulin,
         bg: bg,
         carbs: carbs,
-        insulinPerCarbRatio: insulinPerCarbRatio,
-        timeOfDay: timeOfDay
+        insulinPerCarbRatio: INSULIN_PER_CARB_RATIO
     };
     var message = formatMessage(messageInput);
     return [formattedAdjustedInsulin, message];
 };
 var formatMessage = function (input) {
-    var adjustment = input.adjustment, bg = input.bg, timeOfDay = input.timeOfDay, insulinPerCarbRatio = input.insulinPerCarbRatio, baseInsulin = input.baseInsulin, carbs = input.carbs;
+    var adjustment = input.adjustment, bg = input.bg, insulinPerCarbRatio = input.insulinPerCarbRatio, baseInsulin = input.baseInsulin, carbs = input.carbs;
     var capitalize = function (word) { return (word.charAt(0).toUpperCase() + word.slice(1)); };
     var adjustmentPartial;
     if (adjustment === 0) {
@@ -106,7 +87,7 @@ var formatMessage = function (input) {
         adjustmentPartial = Math.abs(adjustment) + " units of insulin  " + (adjustment > 0 ? "added" : "subtracted");
     }
     var bucket = calculateBucket(bg);
-    var baseMsg = "<li> " + capitalize(timeOfDay) + " insulin to carb ratio: " + insulinPerCarbRatio.toFixed(2) + ". </li>\n                <li> " + capitalize(carbs.toString()) + " carbs * " + insulinPerCarbRatio.toFixed(2) + " units per carb = " + baseInsulin.toFixed(2) + " units of insulin.</li>";
+    var baseMsg = "<li> Fixed insulin to carb ratio: " + insulinPerCarbRatio.toFixed(2) + ". </li>\n                <li> " + capitalize(carbs.toString()) + " carbs * " + insulinPerCarbRatio.toFixed(2) + " units per carb = " + baseInsulin.toFixed(2) + " units of insulin.</li>";
     var adjustmentMsg = "<li>" + capitalize(adjustmentPartial) + " because blood glucose of " + bg + " is in the range of " + bucket[0] + " to " + bucket[1] + ".</li>";
     return baseMsg + "\n" + adjustmentMsg;
 };
@@ -118,8 +99,7 @@ var main = function (request) {
             bloodGlucose: request.bg,
             carbs: request.carbs,
             insulin: 0,
-            message: "Error: Blood Glucose is less than " + MIN_BLOOD_GLUCOSE + ",\n                 and doctor hasn't specified what to do in this situation. \n Time to call a relative.",
-            timeOfDay: request.timeOfDay
+            message: "Error: Blood Glucose is less than " + MIN_BLOOD_GLUCOSE + ",\n                 and doctor hasn't specified what to do in this situation. \n Time to call a relative."
         };
     }
     else if (request.bg > MAX_BLOOD_GLUCOSE) {
@@ -127,17 +107,15 @@ var main = function (request) {
             bloodGlucose: request.bg,
             carbs: request.carbs,
             insulin: 0,
-            message: "Error: Blood Glucose is greater than " + MAX_BLOOD_GLUCOSE + ",\n                and doctor hasn't specified what to do in this situation. \n Time to call a relative.",
-            timeOfDay: request.timeOfDay
+            message: "Error: Blood Glucose is greater than " + MAX_BLOOD_GLUCOSE + ",\n                and doctor hasn't specified what to do in this situation. \n Time to call a relative."
         };
     }
-    var _a = calculateInsulinWithExplanation(request.bg, request.carbs, request.timeOfDay), insulin = _a[0], explanation = _a[1];
+    var _a = calculateInsulinWithExplanation(request.bg, request.carbs), insulin = _a[0], explanation = _a[1];
     return {
         bloodGlucose: request.bg,
         carbs: request.carbs,
         insulin: Number(insulin.toFixed(2)),
-        message: explanation,
-        timeOfDay: request.timeOfDay
+        message: explanation
     };
 };
 var handleRequest = function (event, context, callback) {
